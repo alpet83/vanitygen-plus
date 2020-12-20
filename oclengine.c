@@ -899,11 +899,12 @@ static int
 vg_ocl_init(vg_context_t *vcp, vg_ocl_context_t *vocp, cl_device_id did,
 	    int safe_mode)
 {
-	cl_int ret;
+	cl_int ret = NULL;
 	char optbuf[128];
 	int end = 0;
 
 	memset(vocp, 0, sizeof(*vocp));
+	memset(optbuf, 0, sizeof(*optbuf));
 	vg_exec_context_init(vcp, &vocp->base);
 	vocp->base.vxc_threadfunc = vg_opencl_loop;
 
@@ -927,7 +928,17 @@ vg_ocl_init(vg_context_t *vcp, vg_ocl_context_t *vocp, cl_device_id did,
 			exit(1);
 	}
 
-	vocp->voc_oclctx = clCreateContext(NULL,
+	cl_int errcode = 0;	 
+	cl_platform_id platform_id = 0;
+	cl_uint num_platforms = 0; 
+	errcode = clGetPlatformIDs(1, &platform_id, &num_platforms);
+
+	cl_context_properties props[3];
+	props[0] = (cl_context_properties)CL_CONTEXT_PLATFORM;  // indicates that next element is platform
+	props[1] = (cl_context_properties)platform_id;			// platform is of type cl_platform_id
+	props[2] = (cl_context_properties)0;
+
+	vocp->voc_oclctx = clCreateContext(props,
 					   1, &did,
 					   vg_ocl_context_callback,
 					   NULL,
@@ -1388,6 +1399,9 @@ vg_ocl_get_bignum_tpa(BIGNUM *bn, const unsigned char *buf, int cell)
 struct ec_point_st {
 	const EC_METHOD *meth;
 #if OPENSSL_VERSION_NUMBER >= 0x0010100000
+  #if OPENSSL_VERSION_NUMBER >= 0x0010101000
+	int    curve_name;
+  #endif
 	BIGNUM *X;
 	BIGNUM *Y;
 	BIGNUM *Z;
@@ -1415,6 +1429,7 @@ static INLINE void
 vg_ocl_put_point(unsigned char *buf, const EC_POINT *ppnt)
 {
 	assert(ppnt->Z_is_one);
+	assert(PPNT_ARROW_X);
 	vg_ocl_put_bignum_raw(buf, PPNT_ARROW_X);
 	vg_ocl_put_bignum_raw(buf + 32, PPNT_ARROW_Y);
 }
@@ -1425,6 +1440,7 @@ vg_ocl_put_point_tpa(unsigned char *buf, int cell, const EC_POINT *ppnt)
 	unsigned char pntbuf[64];
 	int start, i;
 
+	memset(pntbuf, 0, sizeof(pntbuf));
 	vg_ocl_put_point(pntbuf, ppnt);
 
 	start = ((((2 * cell) / ACCESS_STRIDE) * ACCESS_BUNDLE) +
@@ -2003,6 +2019,8 @@ vg_opencl_loop(vg_exec_context_t *arg)
 	for (i = 0; i < (nrows + ncols); i++) {
 		ppbase[i] = EC_POINT_new(pgroup);
 		if (!ppbase[i])
+			goto enomem;
+		if (ppbase[i]->X < 0x10000)
 			goto enomem;
 	}
 
@@ -2720,7 +2738,7 @@ vg_ocl_context_new_from_devstr(vg_context_t *vcp, const char *devstr,
 		return NULL;
 
 	save = NULL;
-	part = strtok_r(dsd, ",", &save);
+	part = strtok_s(dsd, ",", &save);
 
 	part2 = strchr(part, ':');
 	if (!part2) {
@@ -2733,7 +2751,7 @@ vg_ocl_context_new_from_devstr(vg_context_t *vcp, const char *devstr,
 	platformidx = atoi(part);
 	deviceidx = atoi(part2 + 1);
 
-	while ((part = strtok_r(NULL, ",", &save)) != NULL) {
+	while ((part = strtok_s(NULL, ",", &save)) != NULL) {
 		param = strchr(part, '=');
 		if (!param) {
 			fprintf(stderr, "Unrecognized parameter '%s'\n", part);
