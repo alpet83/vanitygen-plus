@@ -339,10 +339,12 @@ vg_ocl_dump_info(vg_ocl_context_t *vocp)
 	       vg_ocl_device_getsizet(did, CL_DEVICE_MAX_COMPUTE_UNITS));
 	fprintf(stderr, "Max workgroup size: %" PRSIZET "d\n",
 	       vg_ocl_device_getsizet(did, CL_DEVICE_MAX_WORK_GROUP_SIZE));
-	fprintf(stderr, "Global memory: %ld\n",
-	       vg_ocl_device_getulong(did, CL_DEVICE_GLOBAL_MEM_SIZE));
-	fprintf(stderr, "Max allocation: %ld\n",
-	       vg_ocl_device_getulong(did, CL_DEVICE_MAX_MEM_ALLOC_SIZE));
+
+	float fmem = vg_ocl_device_getulong(did, CL_DEVICE_GLOBAL_MEM_SIZE) / (1048576.0f * 1024.0f);
+	fprintf(stderr, "Global memory: %.2f GiB\n", fmem);
+	fmem = vg_ocl_device_getulong(did, CL_DEVICE_MAX_MEM_ALLOC_SIZE) / (1048576.0f * 1024.0f);
+	fprintf(stderr, "Max allocation: %.2f GiB\n", fmem);
+
 	vocp->voc_dump_done = 1;
 }
 
