@@ -27,6 +27,7 @@
 #include <openssl/bn.h>
 #include <openssl/rand.h>
 
+#define CURL_STATICLIB
 #include <curl/curl.h>
 
 #include "oclengine.h"
